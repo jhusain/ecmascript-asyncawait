@@ -135,46 +135,84 @@ AwaitExpression :
     await [Lexical goal InputElementRegExp]   AssignmentExpression 
 ```
 
-### yield* and parallelism
+### Async Generators
 
-Applying the async keyword to a function expression causes it to return a Promise. This begs the question: what does an  asynchronous generator function return?
+Applying the ```async``` keyword to a function expression causes it to return a Promise. This begs the question: what does an async generator function return?
 
-Let's take a look at how an Array supports iteration.
+A typical ES6 function sends its result to the client via a return statement. If the async modifier is added to the function, the data is sent to the client as an argument to the Promise's then() method.  Swapping a function's result from the return position to the argument position is the Continuation-Passing Style transformation.
+
+An iterator is similar to a typical JavaScript function, in that the position of the function's result is the return value.  
 
 ```JavaScript
 Array.prototype[@@iterator] = function() {
+    var self = this;
     let index = -1;
     return {
         next: () => {
-            return {done: index >= this.length, value: this[++index] };
+            // result of function sent as return value
+            return { done: index >= self.length, value: self[++index] }; 
         },
-        throw: () => { index = this.length; }
+        throw: () => { index = self.length; }
     };
 }
 ```
 
-A typical ES6 function sends its result to the client via a return statement. If the async modifier is added to the function, the data is sent to the client as an argument to a callback function, specifically the Promise's then() method. Swapping the location of the data from the return type is a Continuation-Passing Style transformation.
-
-Promise which injects a value to an observation function.  The end result is that instead of a value being returned from a function, it is injected into a function as an argument, specifically the then callback.
-
-An iterator returned from a generator, returns multiple values via the return type of the iterator's next() method. 
-
-When an async modifier is applied to generator function, the result is the same.  
-What's the opposite of Iteration? Observation. Iterable objects return an iterator that returns values. Observable objects accept an iteratee that receives values. Adding an Observation protocol to ES6 is straightforward because ES6 Iterators are capable of both sending and receiving notifications. Let's take a look at how can add support to Array for the observation using the proposed @@iteratee symbol.
+If we swap the arguments and return type of the @@iterator function we get @@iteratee, a function that accepts an iterator and returns no arguments.
 
 ```JavaScript
 Array.prototype[@@iteratee] = function(iterator) {
     let done;
     for(var count = 0, len = this.length; !done && count < len; count++) {
+        // result of function sent as argument
         {done} = iterator.next(this[count]);
     }
     iterator.close();
 }
 ```
 
-Adding observation to the ES6  iterator object requires only one addition: a close() method.
+Objects that support the iteration protocol can be iterated using the ```for of```  special form.
 
-The ES6  iterator object is actually a combination of an iterator and it Raytee.
+```Javascript
+for(let value of [1,2,3]) {
+    console.log(value);
+}
+```
+
+The code above the desugars into...
+
+```Javascript
+let iterator = [1,2,3][@@iterator](),
+    done = false,
+    value;
+
+    do {
+        {done, value} = iterator.next();
+        if (!done) {
+            console.log(value);
+        }
+    } while(!done);
+```
+
+Objects that support the observation protocol can be observed using the ```for await``` special form,  which is only  available inside of a async generator function.
+
+```Javascript
+async function*() {
+    // retrieve an array of numbers from a promise
+    var collection = await getNumbers();
+    // iterate an Iterable
+    for(let value of [1,2,3]) {
+        yield value;
+    }
+    
+    // observe an Observable
+    for(let value await websocket) {
+        yield value;
+    }
+}
+```
+
+Iterable objects return an iterator that yields values. Observable objects accept an iteratee that receives values. Adding an Observation protocol to ES6 is straightforward because ES6 Iterators are capable of both sending and receiving notifications. Let's take a look at how can add support to Array for the observation using the proposed @@iteratee symbol.
+
 ```JavaScript
 WebSocket.prototype[@@iteratee] = function(iterator) {
     this.onmessage = function(e) {
